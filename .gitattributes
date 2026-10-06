@@ -1,0 +1,18 @@
+# This repo is meant to be cloned on Windows, Mac, and Linux alike, and the
+# shell scripts here run under Git Bash on Windows and real bash elsewhere.
+# A script committed from Windows with CRLF line endings still runs under
+# Git Bash (it tolerates CRLF), but fails outright under any other bash
+# (WSL, a container, a stricter CI runner). Force LF for every script this
+# repo ships, regardless of which OS committed it.
+*.sh text eol=lf
+*.ps1 text eol=lf
+
+# A commit made on Windows does not carry the executable bit at all (NTFS
+# has no such bit for git to read), so a shell script committed there lands
+# in the tree as mode 100644. `./install.sh` then fails with "Permission
+# denied" on a clone that actually enforces the bit (Mac/Linux). There is no
+# gitattributes setting that fixes this on its own: before committing a
+# changed or new .sh file from a Windows checkout, run
+#   git update-index --chmod=+x <path>
+# (or set it once with `git add --chmod=+x` on first add) so the bit is
+# recorded in the commit itself.

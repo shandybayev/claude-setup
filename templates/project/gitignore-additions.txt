@@ -1,0 +1,14 @@
+# Suggested additions when adopting claude-setup in a project.
+# Append the lines you want; none of this is applied automatically.
+
+# Per-lane scratch folders (name the exact ones you cut, or use the pattern below)
+scratch/
+*.scratch/
+
+# Local, unshared project config
+.claude/settings.local.json
+
+# Common local env / secret files; keep real values out of git entirely
+.env
+.env.local
+*.local

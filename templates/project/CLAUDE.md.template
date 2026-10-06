@@ -1,0 +1,50 @@
+# <Project name>: project rules
+
+<One or two lines: what this project is, who it is for.>
+
+Stack: <language/framework, e.g. "Python 3.12 + FastAPI">. Package manager: <e.g. "uv" / "npm" / "pip">.
+
+---
+
+## 1. Commands
+
+- Format: `<format command, or "none configured">`
+- Lint: `<lint command, or "none configured">`
+- Typecheck: `<typecheck command, or "none configured, or N/A for this language">`
+- Test: `<test command, or "none configured">`
+- Build: `<build command, or "N/A">`
+- Run locally: `<dev-server or run command>`
+
+## 2. Structure
+
+- <Target file size, if this project enforces one, e.g. "aim for under 400 lines per file.">
+- <Folder layout: where source, tests, docs, scripts live.>
+
+## 3. Git
+
+- <State whether this repo uses the owner's default workflow's git rule (only the main session runs git/gh, one go per batch) or a project-specific variant.>
+- <Commit message convention, if any, e.g. conventional commits.>
+- No em dashes or en dashes in commit messages or PR descriptions.
+
+## 4. Database
+
+- <"No database." or: kind, how to get a local/throwaway instance, and the rule that agents never write to a shared or production database; only throwaway instances the brief names.>
+
+## 5. Deploy
+
+- <Deploy target, or "not deployed yet".>
+- <How to verify a deploy: what "the running artifact matches this commit" looks like here.>
+
+## 6. The harness (if installed)
+
+- See `HARNESS.md` for the gate layers and how to add a gate.
+- Bypass policy: `--no-verify` only with a stated reason in the commit message; CI still runs the same gates regardless.
+
+## 7. How we work
+
+- Research first, propose a plan, settle real forks with the project owner, then build in small, verifiable slices.
+- After each slice, run the gates above and keep them green. Then say what is done, what is mocked, and what is deferred.
+
+---
+
+This file is project-specific. The owner's generic, global rules (in `~/.claude/CLAUDE.md`) apply everywhere; on a conflict, this file wins for project facts, and the global file wins for safety rules (git discipline, no secrets, confirm before destructive actions, verify-don't-relay, report failures plainly).

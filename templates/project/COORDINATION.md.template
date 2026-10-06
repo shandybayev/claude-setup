@@ -1,0 +1,31 @@
+# Parallel work coordination (<project name>)
+
+Every session reads this file before any git, migration, merge, or deploy action, and updates its own section when something changes. See the `multi-session` skill for the rules this file exists to support.
+
+Created <date> by <session or person>.
+
+## Freeze windows
+
+<List any standing no-merge windows here, e.g. "no merges during a schema migration day." "None declared" if there are none yet.>
+
+## Active efforts
+
+### Effort: <short name>
+
+- Owner session: <session name/id>
+- Worktree / branch: `<path>` / `<branch>`
+- Files or directories it touches: `<glob or list>`
+- Throwaway resource naming: `<e.g. database name prefix, queue name prefix>`
+- Status: <one line, updated at each milestone>
+
+<Repeat one block per active effort.>
+
+## Merge log
+
+| Date | Effort | Branch | Commit | Announced by | Confirmed |
+|---|---|---|---|---|---|
+| <date> | <effort> | <branch> | <sha> | <session> | <yes/no> |
+
+## Shared-file ownership
+
+<Any file or directory more than one effort touches, and which effort resolves conflicts in it. "None" if every effort is on disjoint files.>

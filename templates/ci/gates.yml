@@ -1,0 +1,48 @@
+name: gates
+
+# The backstop behind the git hooks. A hook is local, opt-in, and
+# bypassable (--no-verify, a clone that never ran the installer); CI is none
+# of those things. It runs the SAME harness/gates.sh script the pre-push hook
+# runs, so the two can never drift: there is one gate list, in harness/.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # The diff-scoped gates (file size, debug leftovers) need to know what
+      # "before" means. A hook works that out from the branch upstream; a CI
+      # checkout has no upstream, so GitHub hands over the real base instead.
+      GATE_BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Full history: the diff-scoped gates cannot resolve a base commit
+          # from a shallow checkout and would silently judge an empty scope.
+          fetch-depth: 0
+
+      # Add this project's own setup step here (for example actions/setup-node
+      # or actions/setup-python), then install dependencies, before the gates
+      # run below. harness/gates.sh calls FORMAT_CMD/LINT_CMD/TYPECHECK_CMD/
+      # TEST_CMD from harness/harness.config, so whatever those commands need
+      # on PATH must be set up by this point.
+      # - uses: actions/setup-node@v5
+      #   with:
+      #     node-version: 22
+      # - run: npm ci
+
+      - name: run the harness gates
+        run: bash harness/gates.sh push

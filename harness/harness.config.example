@@ -1,0 +1,44 @@
+# harness.config - project-specific settings for the harness gates.
+# Plain key=value, one per line. Blank lines and lines starting with # are
+# ignored. See harness/README.md for the full key list and what each default
+# means when left blank.
+
+# File-size gate (lines). Over LOC_BLOCK and growing blocks a commit; over
+# LOC_WARN just prints a nudge.
+LOC_WARN=500
+LOC_BLOCK=700
+
+# Whole-project commands, run at push and all (never at commit, to keep a
+# commit fast). Leave blank to skip that check.
+FORMAT_CMD=
+LINT_CMD=
+TYPECHECK_CMD=
+TEST_CMD=
+
+# Commit message subject-line length. Over COMMIT_MSG_MAX blocks; over
+# COMMIT_MSG_WARN (and under the max) just warns.
+COMMIT_MSG_MAX=100
+COMMIT_MSG_WARN=72
+
+# Optional ratchet: a command that prints one integer (an issue count). The
+# count may go down, never up. Leave RATCHET_CMD blank to skip it.
+RATCHET_CMD=
+RATCHET_FILE=harness/ratchet-baseline.json
+
+# Per-extension edit-time formatter/linter, used by edit-check.sh. Add one
+# pair per language the project uses. An extension with neither key set is
+# skipped.
+# FORMAT_js=npx prettier --write
+# LINT_js=npx eslint --quiet
+# FORMAT_ts=npx prettier --write
+# LINT_ts=npx eslint --quiet
+# FORMAT_tsx=npx prettier --write
+# LINT_tsx=npx eslint --quiet
+# FORMAT_py=ruff format
+# LINT_py=ruff check
+
+# Per-extension debug-leftover pattern, used by both edit-check.sh and
+# gates.sh. Defaults cover debugger/console.log/breakpoint()/pdb; override
+# here only if a project needs something different.
+# DEBUG_PATTERN_py=(^|[[:space:];])(breakpoint\(\)|import pdb\b)
+# DEBUG_PATTERN_js=(^|[[:space:];{])(debugger|console\.log)\b

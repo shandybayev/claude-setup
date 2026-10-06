@@ -1,0 +1,23 @@
+# Handoff
+
+Write a new block at the top of this file before a compaction or a long pause, so a fresh session can resume from this block alone. Keep older blocks below for history; mark a block superseded rather than deleting it.
+
+################################################################################
+## ===== CURRENT STATE, <date> (<reason: pre-compact / pause / handoff>). READ THIS BLOCK FIRST =====
+################################################################################
+
+**Workflow:** <e.g. "the owner's default-workflow skill; roles in ~/.claude/agents, spawn by subagent_type, no model override.">
+
+**What is live:** <what is deployed or merged, and its commit/version.>
+
+**In flight:** <effort name> on worktree `<path>`, branch `<branch>`, commit `<sha or "uncommitted">`.
+- Brief: `<path>`. Reviews: `<path(s)>`.
+- Gates: <pass/fail counts>. Tests: <counts>. Build: <pass/fail>.
+- Waiting on: <who, for what>.
+- Next step: <the exact next action, concretely>.
+
+**Open questions for the owner:** <anything only they can decide>.
+
+**Carried known issues:** <anything deferred or accepted as a known limitation>.
+
+**Idle teammates for this slice:** <names, so the next session knows to close them once it ships>.
