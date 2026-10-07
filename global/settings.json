@@ -21,7 +21,18 @@
           {
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/git_guard.sh\"",
-            "timeout": 10
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/session_context.sh\"",
+            "timeout": 20
           }
         ]
       }

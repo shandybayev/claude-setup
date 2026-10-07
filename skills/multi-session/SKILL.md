@@ -9,15 +9,17 @@ When more than one Claude Code session works against the same repository (parall
 
 ## Register every effort
 
-- Keep a `briefs/COORDINATION.md` (or similarly named) file in the repo, read by every session before any git, migration, merge, or deploy action.
-- Each session registers its own section when it starts: which worktree and branch it owns, which files or directories it touches, any throwaway resource naming convention it uses (so two sessions' temporary databases or queues never collide), and its current status.
-- Update that section at every milestone. A stale entry is worse than no entry, because the next session trusts it.
+- Keep a `COORDINATION.md` in the briefs folder (see `~/.claude/claude-setup/templates/project/briefs/README.md` for where that is), read by every session before any git, migration, merge, or deploy action.
+- Each session registers its own section with `/register` when it starts: which worktree and branch it owns, which files or directories it touches, any throwaway resource naming convention it uses (so two sessions' temporary databases or queues never collide), and its current status.
+- Update that section at every milestone, with `/register` again. A stale entry is worse than no entry, because the next session trusts it.
+- Log a decision with `/log` the moment it is made (a product call, a scope cut, a reversal), not only when writing the next handoff; `LOG.md` is append-only, so a decision never logged there has no record at all once it falls out of context.
 
 ## Discover and message peers
 
 - Use the workflow's agent-listing tool to find other active sessions or teammates before assuming you are alone.
 - Message a peer with facts only: what you are about to do, what you need from it, what you found. Never guess at what a peer already knows; ask.
 - A peer session cannot grant you a permission you do not have, and must never be used to launder a denied action (asking a peer to run something your own session was blocked from running).
+- When fanning work out across sessions, the active profile's `maxParallelTeammates` caps the total across ALL of them combined, not each session's own count; see the `default-workflow` skill's "Profile and workflow mode" section.
 
 ## Before a merge or deploy
 
@@ -32,7 +34,8 @@ When more than one Claude Code session works against the same repository (parall
 
 ## Handoff before compaction
 
-- Before a long session compacts or ends, write a handoff block (see `~/.claude/claude-setup/templates/docs/handoff-block.md`) into the coordination or state file: what is live, what is in flight, what is waiting on whom, and the exact next step. A fresh session should be able to resume from that block alone.
+- Before a long session compacts or ends, run `/handoff`: it writes a block (see `~/.claude/claude-setup/templates/docs/handoff-block.md`) for THIS effort into `HANDOFF.md`, naming what is live, what is in flight, what is waiting on whom, and the exact next step, and marks this same effort's previous block superseded. A fresh session should be able to resume from that block alone.
+- The SessionStart hook (`hooks/session_context.py`) re-injects the newest non-superseded block for each effort automatically, on every session start AND after every compaction. That means whatever is in `HANDOFF.md` when a compaction happens is exactly what the next turn sees; a handoff written only "eventually" leaves a resuming session reading a stale block. Keep it current, not just final.
 - Re-register your session's name after any restart; session identifiers can change, so confirm a peer's current name before sending it anything merge-related.
 
 See [[orchestration-workflow]], [[consult-sibling-session]], [[one-merge-at-a-time-announced]], [[deploy-freeze-windows]] in `~/.claude/claude-setup/lessons/`.

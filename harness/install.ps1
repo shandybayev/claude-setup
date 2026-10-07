@@ -54,9 +54,9 @@ if ($Verify) {
             if (& $test) { Say "OK   $label" } else { Say "FAIL $label"; $script:ok = $false }
         }
 
-        # A hook file existing at this path proves nothing on its own: M5
-        # showed install.ps1 could write one with a BOM, which Test-Path
-        # calls fine and git refuses to run. Check the actual bytes.
+        # A hook file existing at this path proves nothing on its own:
+        # install.ps1 could write one with a BOM, which Test-Path calls
+        # fine but git refuses to run. Check the actual bytes.
         function Test-HookRunnable($path) {
             # Resolve to an absolute path through PowerShell's own location
             # first: raw .NET file I/O reads against the PROCESS's current
@@ -94,7 +94,7 @@ if ($Verify) {
             return $false
         }
         # The project's own configured commands, not just the harness
-        # scripts: the brief asked for "the tools on PATH", and a gate that
+        # scripts, must be on PATH: a gate that
         # silently no-ops because FORMAT_CMD names a tool nobody installed
         # is a false sense of security.
         $cfgPath = "harness/harness.config"

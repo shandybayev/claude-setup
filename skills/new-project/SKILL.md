@@ -17,13 +17,17 @@ Both installers link the repo itself to a stable path, `~/.claude/claude-setup`.
    - What is the deploy target (or "none yet")?
    - Does this project have a database? If so, which kind, and is there a safe local or throwaway instance to test against?
    - Does this project have a git remote already, and if so, is it private?
+   - Should the briefs folder live inside this repo (`briefs/`, the default), or outside it (for example when briefs should never be pushed to a shared remote)?
 
 2. **Create the project `CLAUDE.md`** from `~/.claude/claude-setup/templates/project/CLAUDE.md.template`, filling in the answers above. Leave any unanswered placeholder in `<angle brackets>` rather than guessing.
 
-3. **Create the `briefs/` folder** with:
-   - `briefs/README.md` from `~/.claude/claude-setup/templates/project/briefs/README.md`.
-   - `briefs/COORDINATION.md` from `~/.claude/claude-setup/templates/project/COORDINATION.md.template`.
-   - `briefs/HANDOFF.md` from `~/.claude/claude-setup/templates/project/HANDOFF.md.template`.
+3. **Create the briefs folder** (inside the repo at `briefs/` by default; see `~/.claude/claude-setup/templates/project/briefs/README.md` for the exact location rule) with:
+   - `README.md` from `~/.claude/claude-setup/templates/project/briefs/README.md`.
+   - `COORDINATION.md` from `~/.claude/claude-setup/templates/project/COORDINATION.md.template`.
+   - `HANDOFF.md` from `~/.claude/claude-setup/templates/project/HANDOFF.md.template`.
+   - `LOG.md` from `~/.claude/claude-setup/templates/project/LOG.md.template`.
+
+   If the owner wants briefs kept OUTSIDE the repo, create the folder at the path they gave instead, and write `CLAUDE_BRIEFS_DIR` (absolute, or relative to the git root) into the project's `.claude/settings.json` `env` block: read the file first if it exists and merge the one key in, keeping every other key exactly as it was; create the file fresh (with just that one key under `env`) if it does not exist yet. Never overwrite the rest of an existing `.claude/settings.json`.
 
 4. **Suggest `.gitignore` additions** from `~/.claude/claude-setup/templates/project/gitignore-additions.txt`: print them and ask whether to append them to the project's existing `.gitignore`, or append them yourself if asked to.
 

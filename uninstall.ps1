@@ -16,6 +16,7 @@ param(
 )
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $here "profiles/lib/profile.ps1")
 
 function Say($msg) { Write-Host $msg }
 
@@ -47,12 +48,24 @@ function Get-RelSource($rel) {
     switch -Regex ($rel) {
         '^claude-setup$' { return $here }
         '^CLAUDE\.md$' { return (Join-Path $here "global/CLAUDE.md") }
-        '^settings\.json$' { return (Join-Path $here "global/settings.json") }
-        '^agents$' { return (Join-Path $here "agents") }
+        # "agents" and "settings.json" can each point at the repo's own
+        # file/folder (the max profile) or at that profile's own rendered
+        # .profile-build/<name>/ (any other profile); which one depends on
+        # the profile recorded for THIS target, not a fixed path, so both
+        # are resolved the same way install.ps1 resolved them. settings.json
+        # is installed as a plain copy for every non-max profile now, so
+        # this mainly matters if settings.json is somehow still a link at
+        # that path (a manual edit, or a manifest line never refreshed).
+        '^agents$' { return $script:ResolvedAgentsSource }
+        '^settings\.json$' { return $script:ResolvedSettingsSource }
         '^commands$' { return (Join-Path $here "commands") }
         '^hooks$' { return (Join-Path $here "hooks") }
         '^statusline$' { return (Join-Path $here "global/statusline") }
         '^skills/' { return (Join-Path $here $rel) }
+        # claude-setup-profile.json is never a link (always a plain file
+        # this installer wrote outright), so it has no "source" to compare
+        # against; the "copy" branch below never looks at this anyway.
+        '^claude-setup-profile\.json$' { return $null }
         default { return $null }
     }
 }
@@ -62,6 +75,15 @@ if (-not (Test-Path $manifestPath)) {
     Say "No install manifest at $manifestPath. Nothing was recorded as installed by claude-setup here, so nothing will be removed."
     exit 0
 }
+
+# Resolved once, up front, from whatever profile is on record right now --
+# not re-read per manifest line. The manifest's lines are appended in
+# whatever order they were last (re)written in, which need not put
+# "agents" before "claude-setup-profile.json"; reading the record fresh
+# per line could see it already deleted by the time "agents" is reached,
+# and silently fall back to the wrong (max) source.
+$script:ResolvedAgentsSource = Get-ProfileAgentsSource $here $Target
+$script:ResolvedSettingsSource = Get-ProfileSettingsSource $here $Target
 
 $backupsDir = Join-Path $Target "backups"
 $lines = @(Get-Content $manifestPath)

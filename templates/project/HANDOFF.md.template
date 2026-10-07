@@ -1,9 +1,12 @@
 # Handoff
 
-Write a new block at the top of this file before a compaction or a long pause, so a fresh session can resume from this block alone. Keep older blocks below for history; mark a block superseded rather than deleting it.
+Several efforts can share this one file. Before a compaction or a long pause, write a new block for YOUR effort at the very TOP of this file (above every other effort's blocks too), so a fresh session can resume from the newest block for each effort alone. Keep older blocks below for history. When you write a new block, find your OWN effort's previous block further down and add " (SUPERSEDED)" right after "READ THIS BLOCK FIRST" in its header line; never edit or remove its body.
 
+Keep the header on one line, in this exact shape (including the "Z" directly after the minutes, no space before it): the SessionStart hook reads it to inject the newest non-superseded block per effort at the start of every session. The example below is inside an HTML comment on purpose (the hook strips HTML comments before parsing, same as the other briefs templates): copy its shape OUTSIDE the comment for your own block, filling in every placeholder.
+
+<!--
 ################################################################################
-## ===== CURRENT STATE, <date> (<reason: pre-compact / pause / handoff>). READ THIS BLOCK FIRST =====
+## ===== <EFFORT> CURRENT STATE, <YYYY-MM-DD HH:MM>Z (<reason: pre-compact / pause / handoff>). READ THIS BLOCK FIRST =====
 ################################################################################
 
 **Workflow:** <e.g. "the owner's default-workflow skill; roles in ~/.claude/agents, spawn by subagent_type, no model override.">
@@ -21,3 +24,6 @@ Write a new block at the top of this file before a compaction or a long pause, s
 **Carried known issues:** <anything deferred or accepted as a known limitation>.
 
 **Idle teammates for this slice:** <names, so the next session knows to close them once it ships>.
+
+**Last LOG entry:** <date and one-line summary of the most recent briefs/LOG.md entry, or "none yet">.
+-->

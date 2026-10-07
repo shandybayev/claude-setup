@@ -2,6 +2,8 @@
 
 This setup's `probe` role needs a way to drive a real browser. Everything else in the workflow (planning, building, reviewing) works with Claude Code's built-in tools alone; the servers below are the ones worth adding, not a complete catalog.
 
+**Each MCP server you enable adds its whole tool list to every session's context, whether that session uses it or not.** Enable only the ones you actually use; this matters most on a tightly capped plan (see README.md's "On the cheapest plan").
+
 ## Browser automation (for the `probe` role)
 
 **What it's for:** scripted navigation, clicking, form filling, console/network reading, and screenshots, so a `probe` teammate can check a running app under real conditions instead of the orchestrator doing it (see the `browser-testing-via-subagents` lesson: screenshots and click transcripts stay out of the main session's context).

@@ -69,8 +69,8 @@ verify() {
   check "the PostToolUse edit-check hook is wired in .claude/settings.json" \
     "grep -q 'harness/edit-check.sh' .claude/settings.json 2>/dev/null"
 
-  # The project's own configured commands, not just the harness scripts:
-  # the brief asked for "the tools on PATH", and a gate that silently
+  # The project's own configured commands, not just the harness scripts,
+  # must be on PATH: a gate that silently
   # no-ops because FORMAT_CMD names a tool nobody installed is a false
   # sense of security.
   if [ -f harness/harness.config ]; then

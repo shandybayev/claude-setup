@@ -3,3 +3,8 @@ __pycache__/
 *.pyo
 .DS_Store
 Thumbs.db
+
+# Rendered per-profile agent files (install.ps1/install.sh -Profile
+# standard|lite): generated from agents/ + profiles/*.json on every
+# install, never hand-edited, never committed.
+.profile-build/

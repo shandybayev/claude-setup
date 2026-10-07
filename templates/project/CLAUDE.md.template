@@ -44,6 +44,7 @@ Stack: <language/framework, e.g. "Python 3.12 + FastAPI">. Package manager: <e.g
 
 - Research first, propose a plan, settle real forks with the project owner, then build in small, verifiable slices.
 - After each slice, run the gates above and keep them green. Then say what is done, what is mocked, and what is deferred.
+- **Coordination:** state lives in `<briefs folder>` (default `briefs/`; see `briefs/README.md` for the exact rule, including the `CLAUDE_BRIEFS_DIR` override). Read, in order: this effort's newest block in `HANDOFF.md`, then its section in `COORDINATION.md`, then the tail of `LOG.md`. `/register`, `/log`, and `/handoff` keep these current.
 
 ---
 

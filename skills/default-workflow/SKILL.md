@@ -5,7 +5,7 @@ description: The owner's default agentic workflow for building software with tea
 
 # Default workflow
 
-You, the main session, are the **orchestrator**. You talk to the project owner, write briefs, spawn teammates, verify what they claim, and own every git action, the full test suite, the gates, the build, product calls, and review triage. Teammates do the planning, building, reviewing, and probing.
+You, the main session, are the **orchestrator**. You talk to the project owner, write briefs, spawn teammates, verify what they claim, and own every git action, the full test suite, the gates, the build, product calls, and review triage. In `full` and `lean` mode, teammates do the planning, building, reviewing, and probing; in `solo` mode (see "Profile and workflow mode" below), you do all of that yourself, with no teammate at all unless the owner asks for one by role.
 
 Project specifics (repo layout, test commands, gates, size limits, git conventions, coordination files) live in the project's own `CLAUDE.md`, `AGENTS.md`, and briefs. Read those first. This skill is the process; they are the facts.
 
@@ -29,6 +29,26 @@ Spawn each with its `subagent_type`. Model and effort are pinned in `~/.claude/a
 
 There is no separate tester. Testing is split on purpose: the builder runs targeted tests and a revert table, the reviewer re-derives the evidence and runs mutations, you run the full suite, gates, build, and any real-system proof, and the probe runs acceptance.
 
+## Profile and workflow mode
+
+Read `~/.claude/claude-setup-profile.json` (the record the installer writes; see `~/.claude/claude-setup/docs/INSTALL.md`) for the active profile's `workflowMode` and `maxParallelTeammates`. A missing file means `full` mode with a cap of 3, same as the `max` profile.
+
+**`full` mode** is the sequence below, unchanged.
+
+**`lean` mode** trims the sequence for a slice the orchestrator can brief in one page:
+- No `planner` or `plan-reviewer`: the orchestrator writes the brief itself.
+- One `builder` at a time; never start a second while one is in flight.
+- The `adversarial-reviewer` still runs once per slice that changes behavior; its re-check only runs when the first pass raised a must-fix.
+- A `probe` only when the owner asks for one, or a UI change cannot be checked by script.
+
+**`solo` mode** goes further: there is no orchestrator-and-teammates split at all. The main session plans, builds, and tests the slice itself, under the same rules a teammate follows -- a test with every change, name the line each test protects, verify its own claims instead of relaying them on faith, git only on the owner's go, comments describe the code, not the review that produced it. No teammate runs at all unless the owner asks for one by role ("get a reviewer on this", "spin up a builder for this lane").
+
+**Irreversible work is the exception in every mode, `solo` included.** Data moves, migrations, deletes or rewrites of production data, and a deploy a revert cannot undo still get one plan review and one adversarial review no matter the mode -- in practice, any slice that would use `plan-reviewer-critical` or `builder-critical` in `full` mode keeps that same review pair in `lean` and `solo` too; only the standard roles are ever trimmed.
+
+**Review-loop cap, `lean` and `solo`.** At most one review plus one re-check per slice. If must-fix items remain after the re-check, STOP and report them to the owner with the options, rather than starting another fix round. `full` mode is unchanged: it loops until clean, or the owner says stop.
+
+**Honor `maxParallelTeammates` in every mode**, lean, solo, or full: it caps how many builders (or other teammates) run at once, not just whether planning is skipped. A fan-out across multiple sessions respects the same cap; see the `multi-session` skill.
+
 ## The sequence
 
 1. **Research, then ask.** Read the code and the project rules. Settle the real forks with the owner before building. Do not rush to implementation.
@@ -38,7 +58,7 @@ There is no separate tester. Testing is split on purpose: the builder runs targe
 5. **Build.** One `builder` (or `builder-critical`) per lane, one worktree per lane, disjoint file sets. Two or three in parallel at most. When you cut the worktree, add its scratch folder to the repo's local ignore file, and name that folder in the brief.
 6. **Verify the builder's claims yourself** before relaying them: re-run its tests, re-measure its counts, read the risky lines.
 7. **Freeze, then review.** Tell the builder to HOLD. Give the `adversarial-reviewer` the frozen baseline (head revision, test count, line counts) so it can tell if the tree moved.
-8. **One fix round**, sent to the builder as ONE message containing every instruction. Then the same reviewer re-checks.
+8. **A fix round**, sent to the builder as ONE message containing every instruction. Then the same reviewer re-checks. In `full` mode, repeat this step if the re-check still raises a must-fix; `lean`/`solo` cap this at one fix round plus one re-check (see "Review-loop cap" above) and stop and report instead of starting another.
 9. **Your gates, then the pre-commit checklist below.** Full suite, gates, build, and a real-system proof where the change touches a database or a deploy.
 10. **Report to the owner**: what is done, what is mocked, what is deferred, what you got wrong. Then follow the git rules below.
 11. **Post-merge: deploy, verify, monitor, close.** See the section below. The work is not done at the merge.
@@ -82,7 +102,7 @@ After the owner merges:
 
 ## Continuity, teammates, and sessions
 
-- **Keep a state file per effort** (the project names where), updated at every milestone: what is live, open PRs with heads, what is waiting on whom, the next step, and environment facts. Before a compaction or a long pause, update it so a fresh session can resume from it alone.
+- **Keep a state file per effort** (the project names where), updated at every milestone: what is live, open PRs with heads, what is waiting on whom, the next step, and environment facts. Before a compaction or a long pause, update it so a fresh session can resume from it alone. In a project using the briefs kit, that is `/register` (COORDINATION.md), `/log` (LOG.md), and `/handoff` (HANDOFF.md) -- see `~/.claude/claude-setup/templates/project/briefs/README.md`. The SessionStart hook re-injects the newest handoff block automatically, so write it before, not just after, a compaction.
 - **Close teammates when their slice ships.** Do not leave idle builders and reviewers from finished work listed.
 - **Sessions sharing a repo set need a written contract**: worktrees, file scopes, one merge at a time, and a merge log that every session reads before merging and updates after. See the `multi-session` skill.
 

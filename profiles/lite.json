@@ -1,0 +1,20 @@
+{
+  "name": "lite",
+  "description": "Lowest usage limits: Sonnet (Haiku for the probe), solo workflow (no teammates unless asked).",
+  "main": {
+    "model": "claude-sonnet-5",
+    "effortLevel": "medium"
+  },
+  "workflowMode": "solo",
+  "maxParallelTeammates": 1,
+  "sessionContextChars": 3000,
+  "roles": {
+    "planner": { "model": "claude-sonnet-5", "effort": "medium" },
+    "plan-reviewer": { "model": "claude-sonnet-5", "effort": "medium" },
+    "builder": { "model": "claude-sonnet-5", "effort": "medium" },
+    "adversarial-reviewer": { "model": "claude-sonnet-5", "effort": "medium" },
+    "probe": { "model": "claude-haiku-4-5-20251001", "effort": "medium" },
+    "plan-reviewer-critical": { "model": "claude-sonnet-5", "effort": "high" },
+    "builder-critical": { "model": "claude-sonnet-5", "effort": "high" }
+  }
+}

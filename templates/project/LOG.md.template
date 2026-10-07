@@ -1,0 +1,14 @@
+# Decision log
+
+One entry per decision or owner call, in the shape below. Append new entries at the BOTTOM: this file is newest-at-the-bottom, the opposite order from HANDOFF.md. Never edit or delete an old entry, even a wrong one; a reversal is a new entry that names the entry it reverses.
+
+The SessionStart hook (hooks/session_context.py) injects the last 10 entries at the start of every session, so keep each entry short and in this exact shape (one `###` line per entry, in order, blank line between entries). The example below is inside an HTML comment on purpose: the hook strips HTML comments before looking for entries, so this fresh file injects nothing until a real entry is appended outside the comment.
+
+<!--
+### <YYYY-MM-DD HH:MM>Z - <effort>
+- Decided: <what was decided, one line>
+- Why: <the reason, one or two lines>
+- By: <who decided: owner, or a named reviewer/session>
+-->
+
+<Repeat one block per entry, oldest first, newest at the bottom, OUTSIDE this comment.>

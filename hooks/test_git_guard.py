@@ -1,4 +1,4 @@
-import json, os, shutil, subprocess, sys, tempfile
+import json, os, shutil, subprocess, sys, tempfile, time
 
 HOOKS_DIR = os.path.dirname(os.path.abspath(__file__))
 WRAPPER = os.path.join(HOOKS_DIR, "git_guard.sh")
@@ -46,6 +46,85 @@ if not GITBASH:
     # it is meant to verify was never actually exercised.
     print("CANNOT VERIFY: no bash found on PATH; install Git (ships Git Bash) to run this test.")
     sys.exit(1)
+
+
+def to_posix_path(path):
+    """A Windows path (as sys.executable gives it) in the /c/... form a
+    hand-written bash stub can `exec` directly."""
+    drive, rest = os.path.splitdrive(path)
+    if drive:
+        return "/" + drive[0].lower() + rest.replace("\\", "/")
+    return path.replace("\\", "/")
+
+
+# A fake "python3" that answers `-c 1` fine (the old probe this wrapper
+# used to trust) but fails the REAL invocation with rc 126, the exact
+# shape of a Windows "python3" that resolves on PATH to the WindowsApps
+# app-execution alias stub: `command -v` finds it, and even a `-c 1`
+# smoke test can pass, but the actual exec of a real script
+# intermittently refuses with "Permission denied". Used for both
+# candidate slots (named "python3" and "python") so a test can make
+# either one, or both, behave this way.
+FAKE_EXEC_FAIL_BODY = (
+    "#!/usr/bin/env bash\n"
+    'if [ "$1" = "-c" ] && [ "$2" = "1" ]; then\n'
+    "  exit 0\n"
+    "fi\n"
+    "exit 126\n"
+)
+
+
+# A fake "python3"/"python" shaped like the WindowsApps stub when NO
+# Python is installed behind it at all: prints the Microsoft Store
+# prompt and exits 9009, every time, `-c 1` included -- unlike
+# FAKE_EXEC_FAIL_BODY's rc 126, this is what the REAL stub actually does
+# in that case, and the old "only retry on 126/127" logic would have
+# wrongly trusted this as git_guard.py's own (final) result, letting a
+# subagent's git write through unguarded (rc 9009 is a non-blocking
+# error to Claude Code, not a deny).
+FAKE_STORE_BODY = (
+    "#!/usr/bin/env bash\n"
+    'echo "Python was not found; run without arguments to install from the Microsoft Store." >&2\n'
+    "exit 9009\n"
+)
+
+# A candidate that answers `-c 1` fine but HANGS on the real invocation
+# (never exits on its own): the shape neither rc 126 nor rc 9009 covers,
+# since both of those are fast failures. Without the wrapper's own time
+# limit, this candidate would tie up the hook until Claude Code's outer
+# hook timeout kills it; the wrapper's `timeout 6` must cut it off first
+# so the next candidate (or the fallback) still gets a chance.
+FAKE_HANG_BODY = (
+    "#!/usr/bin/env bash\n"
+    'if [ "$1" = "-c" ] && [ "$2" = "1" ]; then\n'
+    "  exit 0\n"
+    "fi\n"
+    "sleep 60\n"
+)
+
+
+def make_fake_python_dir(prefix, python_body, python3_body=FAKE_EXEC_FAIL_BODY):
+    """A directory holding a fake "python3" (python3_body, default
+    FAKE_EXEC_FAIL_BODY) and a "python" with the given body, meant to be
+    PREPENDED to PATH (not used as the whole PATH: grep, sed, and
+    bash's other external tools still need to resolve from the real
+    PATH). python_body is FAKE_EXEC_FAIL_BODY or FAKE_STORE_BODY again
+    to simulate every candidate failing to exec, or a stub that execs
+    the REAL interpreter running this test (sys.executable, not
+    whatever "python3"/"python" happen to resolve to on PATH -- on this
+    machine that IS the flaky alias being tested around) to simulate
+    the second candidate actually working.
+    """
+    d = tempfile.mkdtemp(prefix=prefix)
+    for name, body in (("python3", python3_body), ("python", python_body)):
+        path = os.path.join(d, name)
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(body)
+        os.chmod(path, 0o755)
+    return d
+
+
+REAL_PYTHON_BODY = '#!/usr/bin/env bash\nexec "%s" "$@"\n' % to_posix_path(sys.executable)
 
 # (who, command, expected) ; who: "sub" or "main" ; expected: deny / ask / pass
 CASES = [
@@ -104,13 +183,12 @@ CASES = [
 ]
 
 # PowerShell-shaped commands: same tool_input.command field, but the
-# matcher now covers the PowerShell tool too (M14 -- the guard used to only
-# look at the Bash tool_name, so a subagent running the SAME git write
-# through the PowerShell tool went unguarded). Exercises ";" and "&" as
-# command separators (both already in the shared _START pattern), a bare
-# "git.exe" (already optional in the git pattern), and the one thing that
-# needed an actual code change: a backtick-newline continuation splitting
-# "git" from its verb across two lines.
+# matcher covers the PowerShell tool_name too, not just Bash, so a
+# subagent running the same git write through PowerShell is guarded the
+# same way. Exercises ";" and "&" as command separators (both already in
+# the shared _START pattern), a bare "git.exe" (already optional in the
+# git pattern), and a backtick-newline continuation splitting "git" from
+# its verb across two lines.
 PS_CASES = [
     ("sub", "git commit -m 'x'", "deny"),
     ("sub", "git.exe commit -m 'x'", "deny"),
@@ -131,9 +209,10 @@ PS_CASES = [
     ("main", "& gh pr create --title x", "pass"),
 ]
 
-# Re-check round, Guard gaps: every PowerShell and Bash shape the re-check
-# found passing where the policy wants deny, plus a read-only counterpart
-# for each one (false positives would break a builder's normal workflow).
+# Guard gaps: PowerShell and Bash shapes that let a git write through
+# where the policy wants deny (a conditional, a pipeline, a loop body),
+# plus a read-only counterpart for each one so a false positive does not
+# break a builder's normal workflow.
 GAP_CASES = [
     ("sub", "try { git commit -m x } catch {}", "deny"),
     ("sub", "if ($true) { git push origin feat }", "deny"),
@@ -173,10 +252,10 @@ BASH_GAP_CASES = [
     ("sub", "echo 'what to do git-wise later'", "pass"),
 ]
 
-# F2 (last guard round, owner's curated list): a handful of everyday Bash
-# and PowerShell shapes the final review still found passing. Each has a
-# read-only counterpart right below it.
-F2_BASH_CASES = [
+# A handful of everyday Bash and PowerShell shapes (env vars before the
+# command, an if/while around a git write) that must still deny. Each
+# has a read-only counterpart right below it.
+EVERYDAY_BASH_CASES = [
     ("sub", "GIT_EDITOR=true git merge main", "deny"),
     ("sub", "FOO=1 BAR=2 git push", "deny"),
     ("sub", "if git commit -m x; then echo ok; fi", "deny"),
@@ -195,7 +274,7 @@ F2_BASH_CASES = [
     ("sub", 'echo "result=git-friendly text FOO=1"', "pass"),
 ]
 
-F2_PS_CASES = [
+EVERYDAY_PS_CASES = [
     ("sub", 'cmd /c "git commit -m x"', "deny"),
     ("sub", 'powershell -Command "git commit -m x"', "deny"),
     ("sub", "Start-Process git -ArgumentList 'commit','-m','x'", "deny"),
@@ -231,8 +310,8 @@ run_cases(CASES, "Bash", "")
 run_cases(PS_CASES, "PowerShell", "ps:")
 run_cases(GAP_CASES, "PowerShell", "gap:")
 run_cases(BASH_GAP_CASES, "Bash", "bgap:")
-run_cases(F2_BASH_CASES, "Bash", "f2:")
-run_cases(F2_PS_CASES, "PowerShell", "f2ps:")
+run_cases(EVERYDAY_BASH_CASES, "Bash", "everyday:")
+run_cases(EVERYDAY_PS_CASES, "PowerShell", "everydayps:")
 
 # a non-Bash tool must pass: valid JSON, decide() runs normally and
 # returns (None, None) since "Edit" is neither Bash nor PowerShell, never
@@ -247,12 +326,11 @@ fails += not ok
 total += 1
 print(("OK  " if ok else "FAIL") + f" non-Bash tool: rc={r.returncode} stdout={r.stdout.decode().strip()!r}")
 
-# R3/F4 (owner decision, tightened by F4): an undecidable payload fails
-# CLOSED (exit 2, deny) unless it is "clearly main" -- decodes, looks like
-# a COMPLETE JSON object (braces balanced, not just first/last character:
-# a payload truncated right after a NESTED object still ends in "}" from
-# that inner object), and has no agent_id text anywhere. Short of all
-# three, it is a subagent.
+# An undecidable payload fails CLOSED (exit 2, deny) unless it is
+# "clearly main" -- decodes, looks like a COMPLETE JSON object (braces
+# balanced, not just first/last character: a payload truncated right
+# after a NESTED object still ends in "}" from that inner object), and
+# has no agent_id text anywhere. Short of all three, it is a subagent.
 for label, data, want_rc in [
     # unparseable, but agent_id is visible in the raw text -> blocked
     ('unparseable + agent_id -> blocked', '{not json but "agent_id": "abc-123" is right there', 2),
@@ -296,11 +374,12 @@ fails += not ok
 total += 1
 print(("OK  " if ok else "FAIL") + f" real main-session payload shape -> allowed: rc={r.returncode} stdout={r.stdout.decode().strip()!r}")
 
-# Same R3 rule, one layer earlier: no working Python interpreter at all
-# means git_guard.py never runs, so the wrapper itself must apply the
-# fail-closed-for-a-subagent rule using its own raw-text sniff. PATH is
-# narrowed to just bash's own directory for this one call so neither
-# python3 nor python can be found, without disturbing any other test.
+# The same fail-closed rule, one layer earlier: no working Python
+# interpreter at all means git_guard.py never runs, so the wrapper
+# itself must apply the fail-closed-for-a-subagent rule using its own
+# raw-text sniff. PATH is narrowed to just bash's own directory for this
+# one call so neither python3 nor python can be found, without
+# disturbing any other test.
 no_python_env = dict(TEST_ENV)
 no_python_env["PATH"] = os.path.dirname(GITBASH)
 for label, payload, want_rc in [
@@ -389,6 +468,111 @@ ok = got == "deny" and r.returncode == 0
 fails += not ok
 total += 1
 print(("OK  " if ok else "FAIL") + f" bom-payload deny got={got} rc={r.returncode}")
+
+# A "python3" candidate that resolves on PATH and answers `-c 1` fine,
+# but whose REAL invocation fails to exec (rc 126) -- the wrapper must
+# move on to the next candidate and run the REAL git_guard.py there,
+# not fall back to the raw-text sniff (which would still get the right
+# answer here, but for the wrong reason, and would not for every shape
+# the raw sniff cannot fully replicate).
+fallback_dir = make_fake_python_dir("git-guard-test-fakepy-", REAL_PYTHON_BODY)
+fallback_env = dict(TEST_ENV, PATH=fallback_dir + os.pathsep + TEST_ENV["PATH"])
+# A normal decision from the REAL git_guard.py always exits 0 (the
+# decision itself travels as JSON, not the process exit code; exit 2 is
+# only the wrapper's OWN fallback below, for when git_guard.py cannot
+# run or cannot decide at all) -- so this checks the JSON decision, the
+# same way run_cases() does for every other real-git_guard.py case.
+for label, payload, want_decision in [
+    ("python3 fails real exec, subagent -> blocked by the real git_guard.py",
+     {"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}, "agent_id": "abc-123"}, "deny"),
+    ("python3 fails real exec, main session -> allowed by the real git_guard.py",
+     {"tool_name": "Bash", "tool_input": {"command": "git status"}}, "pass"),
+]:
+    r = subprocess.run([GITBASH, WRAPPER], input=json.dumps(payload).encode(), capture_output=True, env=fallback_env)
+    out = r.stdout.decode().strip()
+    got = json.loads(out)["hookSpecificOutput"]["permissionDecision"] if out else "pass"
+    ok = got == want_decision and r.returncode == 0
+    fails += not ok
+    total += 1
+    print(("OK  " if ok else "FAIL") + f" {label}: got={got} (want {want_decision}) rc={r.returncode} stderr={r.stderr.decode().strip()!r}")
+
+# Every candidate fails to exec (python3 AND python both answer `-c 1`
+# but refuse the real run): same fail-closed-for-a-subagent,
+# fail-open-for-main rule as "no interpreter found at all", using the
+# wrapper's own raw-text sniff.
+allfail_dir = make_fake_python_dir("git-guard-test-fakepyall-", FAKE_EXEC_FAIL_BODY)
+allfail_env = dict(TEST_ENV, PATH=allfail_dir + os.pathsep + TEST_ENV["PATH"])
+for label, payload, want_rc in [
+    ("every candidate fails real exec, subagent -> blocked", {"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}, "agent_id": "abc-123"}, 2),
+    ("every candidate fails real exec, main session -> allowed", {"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}}, 0),
+]:
+    r = subprocess.run([GITBASH, WRAPPER], input=json.dumps(payload).encode(), capture_output=True, env=allfail_env)
+    ok = r.returncode == want_rc
+    fails += not ok
+    total += 1
+    print(("OK  " if ok else "FAIL") + f" {label}: rc={r.returncode} (want {want_rc}) stderr={r.stderr.decode().strip()!r}")
+
+# A "python3" shaped like the WindowsApps stub with NO Python installed
+# at all (FAKE_STORE_BODY, rc 9009, not 126/127, and not 0 or 2 either):
+# a retry that only checks for 126/127 would wrongly trust this rc as
+# git_guard.py's own result and stop there -- which for a subagent's
+# git write means ALLOWED instead of denied, since rc 9009 itself is a
+# non-blocking error to Claude Code. The real fix must fall through to
+# "python" instead.
+store_fallback_dir = make_fake_python_dir("git-guard-test-store-", REAL_PYTHON_BODY, python3_body=FAKE_STORE_BODY)
+store_fallback_env = dict(TEST_ENV, PATH=store_fallback_dir + os.pathsep + TEST_ENV["PATH"])
+for label, payload, want_decision in [
+    ("python3 exits 9009 (Store stub), subagent -> blocked by the real git_guard.py",
+     {"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}, "agent_id": "abc-123"}, "deny"),
+    ("python3 exits 9009 (Store stub), main session -> allowed by the real git_guard.py",
+     {"tool_name": "Bash", "tool_input": {"command": "git status"}}, "pass"),
+]:
+    r = subprocess.run([GITBASH, WRAPPER], input=json.dumps(payload).encode(), capture_output=True, env=store_fallback_env)
+    out = r.stdout.decode().strip()
+    got = json.loads(out)["hookSpecificOutput"]["permissionDecision"] if out else "pass"
+    ok = got == want_decision and r.returncode == 0
+    fails += not ok
+    total += 1
+    print(("OK  " if ok else "FAIL") + f" {label}: got={got} (want {want_decision}) rc={r.returncode} stderr={r.stderr.decode().strip()!r}")
+
+# Both candidates are the Store stub (rc 9009 either way): same
+# fail-closed-for-a-subagent, fail-open-for-main rule as "no interpreter
+# found at all".
+store_allfail_dir = make_fake_python_dir("git-guard-test-storeall-", FAKE_STORE_BODY, python3_body=FAKE_STORE_BODY)
+store_allfail_env = dict(TEST_ENV, PATH=store_allfail_dir + os.pathsep + TEST_ENV["PATH"])
+for label, payload, want_rc in [
+    ("both candidates as the Store stub (9009), subagent -> blocked", {"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}, "agent_id": "abc-123"}, 2),
+    ("both candidates as the Store stub (9009), main session -> allowed", {"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}}, 0),
+]:
+    r = subprocess.run([GITBASH, WRAPPER], input=json.dumps(payload).encode(), capture_output=True, env=store_allfail_env)
+    ok = r.returncode == want_rc
+    fails += not ok
+    total += 1
+    print(("OK  " if ok else "FAIL") + f" {label}: rc={r.returncode} (want {want_rc}) stderr={r.stderr.decode().strip()!r}")
+
+# A hanging candidate (answers `-c 1`, then never exits on the real
+# run): both candidates hang here, so the wrapper must fall all the way
+# through to the no-interpreter fallback -- and do it within the 4s per
+# candidate limit, not wait out the full 60s sleep each fake interpreter
+# would otherwise impose. Each call's own elapsed time is checked
+# against Claude Code's 20s hook timeout individually (not the two
+# calls added together): a 21s call next to a 7s one would pass a
+# combined-under-30s check despite one single call already blowing the
+# real limit that matters.
+hang_dir = make_fake_python_dir("git-guard-test-hang-", FAKE_HANG_BODY, python3_body=FAKE_HANG_BODY)
+hang_env = dict(TEST_ENV, PATH=hang_dir + os.pathsep + TEST_ENV["PATH"])
+HOOK_TIMEOUT = 20
+for label, payload, want_rc in [
+    ("hanging candidates, subagent -> blocked within the hook timeout", {"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}, "agent_id": "abc-123"}, 2),
+    ("hanging candidates, main session -> allowed within the hook timeout", {"tool_name": "Bash", "tool_input": {"command": "git commit -m x"}}, 0),
+]:
+    call_start = time.monotonic()
+    r = subprocess.run([GITBASH, WRAPPER], input=json.dumps(payload).encode(), capture_output=True, env=hang_env, timeout=HOOK_TIMEOUT + 10)
+    call_elapsed = time.monotonic() - call_start
+    ok = r.returncode == want_rc and call_elapsed < HOOK_TIMEOUT
+    fails += not ok
+    total += 1
+    print(("OK  " if ok else "FAIL") + f" {label}: rc={r.returncode} (want {want_rc}) {call_elapsed:.1f}s (want < {HOOK_TIMEOUT}s) stderr={r.stderr.decode().strip()!r}")
 
 print(f"\n{total - fails} passed, {fails} failed")
 sys.exit(1 if fails else 0)

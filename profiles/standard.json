@@ -1,0 +1,20 @@
+{
+  "name": "standard",
+  "description": "Middle usage limits: Sonnet for most roles, Opus for 3 critical/review roles, lean workflow, 2 in parallel.",
+  "main": {
+    "model": "claude-sonnet-5",
+    "effortLevel": "high"
+  },
+  "workflowMode": "lean",
+  "maxParallelTeammates": 2,
+  "sessionContextChars": 6000,
+  "roles": {
+    "planner": { "model": "claude-sonnet-5", "effort": "high" },
+    "plan-reviewer": { "model": "claude-sonnet-5", "effort": "medium" },
+    "builder": { "model": "claude-sonnet-5", "effort": "high" },
+    "adversarial-reviewer": { "model": "claude-opus-5-5", "effort": "high" },
+    "probe": { "model": "claude-sonnet-5", "effort": "medium" },
+    "plan-reviewer-critical": { "model": "claude-opus-5-5", "effort": "high" },
+    "builder-critical": { "model": "claude-opus-5-5", "effort": "high" }
+  }
+}

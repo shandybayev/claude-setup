@@ -27,6 +27,7 @@ This file is generic. It applies to every project. Each project adds its own `CL
 - **Comments and docstrings describe the code itself:** what it does and why. Never reference a brief, a review file, a round label ("round 3", "R2-1"), a plan or decision code, or "the reviewer asked for this." Review history belongs in the pull request description, not the code.
 - **No stray files.** Don't leave scratch scripts, debug output, or half-finished drafts in the tree; use a scratch folder outside the project, or clean up before finishing.
 - **Line endings.** Keep a file's existing line endings; don't let a tool silently convert a whole file's endings as a side effect of a small change.
+- **Commit messages.** No `Co-Authored-By` trailer, and no other appended trailer or link. Use the message as given, nothing appended. When asked to write a commit message, write it in a human, casual voice.
 
 ## Testing
 
@@ -45,21 +46,11 @@ Use ASD-STE100 Simplified Technical English for status reports and summaries: on
 
 ## The default workflow
 
-When asked to "use my default workflow" (or "default workflow"), load the `default-workflow` skill and run the work as lanes: you are the orchestrator, and teammates plan, build, review, and probe.
+When asked to "use my default workflow" (or "default workflow"), load the `default-workflow` skill. In `full`/`lean` mode, run the work as lanes: you are the orchestrator, and teammates plan, build, review, and probe. In `solo` mode (the `lite` profile's default), you do that work yourself, with no teammate unless the owner asks for one by role.
 
-Teammates are spawned by role, using the agent types in `~/.claude/agents/`. Model and effort are pinned there:
+Teammates are spawned by role, using the agent types in `~/.claude/agents/`. The model and effort for each role, plus the main session's own model and effort, come from the active **profile**: the record at `~/.claude/claude-setup-profile.json` (missing file means the `max` profile) picks a file from `~/.claude/claude-setup/profiles/`. For `standard` and `lite` that file's values are rendered straight into each role's agent frontmatter AND into `settings.json`'s `model`/`effortLevel`/`modelSettings` at install time, so the main session actually runs on what the profile says. `max` is the one exception: it links the agent files and `settings.json` unchanged from this repo instead of rendering, so **to change `max`, edit the agent files (or `settings.json`) and `profiles/max.json` together** -- installing a drifted `max.json` fails on purpose rather than silently installing from the (correct) files while claiming a change that was never applied.
 
-| Role | `subagent_type` | Model | Effort |
-|---|---|---|---|
-| Planner | `planner` | Opus 5.5 | medium |
-| Plan reviewer | `plan-reviewer` | Sonnet 5 | high |
-| Builder | `builder` | Sonnet 5 | high |
-| Adversarial reviewer | `adversarial-reviewer` | Opus 5.5 | high |
-| Probe | `probe` | Sonnet 5 | medium |
-| Plan reviewer, critical | `plan-reviewer-critical` | Opus 5.5 | high |
-| Builder, critical | `builder-critical` | Opus 5.5 | high |
-
-The `-critical` variants are for IRREVERSIBLE work only (data moves, schema migrations, anything a revert cannot undo). **Never pass a `model` override** when spawning a teammate; a per-call model beats the agent definition and silently discards this routing. **Never use Fable for teammates.** To change a role's model or effort, edit its file in `~/.claude/agents/`.
+The `-critical` variants are for IRREVERSIBLE work only (data moves, schema migrations, anything a revert cannot undo), in every profile. **Never pass a `model` override** when spawning a teammate; a per-call model beats the agent definition and silently discards the active profile's routing. **Never use Fable for teammates.** To change `standard` or `lite`, editing their own file in `~/.claude/claude-setup/profiles/` is enough. To switch which profile is active, reinstall with `-Profile <name>` / `--profile <name>` (see `docs/INSTALL.md`); a plain re-run with no flag keeps whatever is already active.
 
 ## Project layer
 

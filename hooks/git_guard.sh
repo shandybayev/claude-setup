@@ -31,27 +31,74 @@ case "$filter" in
   *git*|*gh*)
     # Try python3 first, then python: recent macOS and stock Debian/Ubuntu
     # ship only python3, and a bare "python" there is "command not found",
-    # not a working interpreter. Probe each candidate with `-c 1` before
-    # trusting it, since Windows ships a WindowsApps "python3" stub that
-    # resolves on PATH but does not actually run.
-    py=""
-    for cand in python3 python; do
-      if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 1 >/dev/null 2>&1; then
-        py="$cand"
-        break
-      fi
-    done
+    # not a working interpreter. Each candidate's REAL invocation is what
+    # gets tried (piping the actual input), not a synthetic probe:
+    # `command -v` finding a candidate does not guarantee the exec that
+    # follows will actually run it. On Windows, a bare "python3" on PATH
+    # can resolve to the WindowsApps app-execution alias stub, which:
+    # with Python actually installed behind it, intermittently fails the
+    # real exec with "Permission denied" (rc 126) even on a call that
+    # otherwise looks identical to one that just worked; with NO Python
+    # installed at all, instead prints a Microsoft Store prompt and
+    # exits 9009, every time, `-c 1` included -- neither is a value
+    # git_guard.py itself would ever produce (see its own main(): it
+    # only ever returns 0 -- a decision, if any, travels as JSON on
+    # stdout, not the exit code -- or 2, its own fail-closed path when
+    # IT cannot decide). So the check is the other way around: only rc 0
+    # or rc 2 are git_guard.py's own, real, final result; ANY other
+    # value, whatever it is (including 124, a timeout -- see below),
+    # means THIS candidate never actually ran it, and the next one gets
+    # a try.
+    #
+    # A time limit per candidate: `timeout 4` where `timeout` exists
+    # (GNU coreutils; ships with Git for Windows, not stock macOS), else
+    # `perl -e 'alarm shift; exec @ARGV or exit 127' 4` where perl exists (ships
+    # with macOS; SIGALRM there gives rc 142, which already falls into
+    # the same "did not run" bucket as any other non-matching rc
+    # below), else no limit at all -- a documented residual on a
+    # machine with neither. Without ANY limit, a HUNG interpreter (not
+    # a fast failure like rc 126/9009) ties up this hook, which runs on
+    # EVERY git/gh Bash or PowerShell call, until Claude Code's own
+    # hook timeout kills it from outside; whether a killed hook still
+    # fails open (letting a subagent's git write through unguarded) is
+    # Claude Code's call, not this script's, so a candidate that would
+    # hang is cut off here first, before that question even comes up.
+    # An ARRAY, not a string: a plain string containing the perl
+    # one-liner's own quotes would not survive unquoted word-splitting
+    # below (the shell would split it into the wrong argv entirely); an
+    # empty array expands to nothing, unlike an empty string variable,
+    # which would still pass one stray empty argument.
     guard_py="$HOME/.claude/hooks/git_guard.py"
-
-    if [ -n "$py" ] && [ -f "$guard_py" ]; then
-      printf '%s' "$input" | "$py" "$guard_py"
-      exit $?
+    ran=0
+    rc=0
+    timeout_cmd=()
+    if command -v timeout >/dev/null 2>&1; then
+      timeout_cmd=(timeout 4)
+    elif command -v perl >/dev/null 2>&1; then
+      timeout_cmd=(perl -e 'alarm shift; exec @ARGV or exit 127' 4)
+    fi
+    if [ -f "$guard_py" ]; then
+      for cand in python3 python; do
+        command -v "$cand" >/dev/null 2>&1 || continue
+        printf '%s' "$input" | "${timeout_cmd[@]}" "$cand" "$guard_py"
+        rc=$?
+        if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+          continue
+        fi
+        ran=1
+        break
+      done
     fi
 
-    # Either no interpreter, or git_guard.py itself is missing: the
-    # normal, correct decision is unavailable either way. Fall back to
-    # the same raw-text sniff git_guard.py's _sniff_agent_id implements,
-    # done here with grep/sed since no JSON parser is guaranteed on PATH.
+    if [ "$ran" -eq 1 ]; then
+      exit "$rc"
+    fi
+
+    # Either no candidate could actually run git_guard.py, or the file
+    # itself is missing: the normal, correct decision is unavailable
+    # either way. Fall back to the same raw-text sniff git_guard.py's
+    # _sniff_agent_id implements, done here with grep/sed since no JSON
+    # parser is guaranteed on PATH.
     #
     # "Clearly main" requires a non-empty agent_id value to be absent AND
     # the text to look like a COMPLETE JSON object. Checking only that it
@@ -80,10 +127,10 @@ case "$filter" in
       fi
     fi
 
-    if [ -z "$py" ]; then
-      reason="no working python3 or python found on PATH"
-    else
+    if [ ! -f "$guard_py" ]; then
       reason="$guard_py not found or not readable"
+    else
+      reason="no working python3 or python found on PATH"
     fi
     if [ "$is_sub" -eq 1 ]; then
       echo "git_guard: $reason; blocking because this looks like a subagent call and the guard cannot verify it is safe without running git_guard.py. Install python3 / restore the file." >&2

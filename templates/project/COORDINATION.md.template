@@ -6,7 +6,7 @@ Created <date> by <session or person>.
 
 ## Freeze windows
 
-<List any standing no-merge windows here, e.g. "no merges during a schema migration day." "None declared" if there are none yet.>
+<!-- List any standing no-merge windows here, e.g. "no merges during a schema migration day." "None declared" if there are none yet. This example is inside an HTML comment on purpose: the SessionStart hook strips HTML comments before reading this section, so a fresh file injects nothing until a real freeze window (or "None declared") is written OUTSIDE this comment. -->
 
 ## Active efforts
 
